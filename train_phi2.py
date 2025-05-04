@@ -1,72 +1,54 @@
-from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer
-from transformers import TrainingArguments
-from transformers import DataCollatorForLanguageModeling
-from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments, Trainer
+from peft import get_peft_model, LoraConfig, TaskType
 from datasets import load_dataset
-import torch
 
-# Step 1: Load model and tokenizer
-model_name = "microsoft/phi-2"
-tokenizer = AutoTokenizer.from_pretrained(model_name)
-tokenizer.pad_token = tokenizer.eos_token
+model_id = "microsoft/phi-2"
+tokenizer = AutoTokenizer.from_pretrained(model_id)
+model = AutoModelForCausalLM.from_pretrained(model_id, device_map="auto", torch_dtype="auto")
 
-# model = AutoModelForCausalLM.from_pretrained(
-#     model_name,
-#     device_map="auto",
-#     load_in_4bit=True
-# )
+# Load your dataset
+dataset = load_dataset("json", data_files={"train": "dataset.jsonl"})
 
-model = AutoModelForCausalLM.from_pretrained(model_name)
-
-data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
-
-
-# Step 2: Prepare model for LoRA fine-tuning
-model = prepare_model_for_kbit_training(model)
-
-lora_config = LoraConfig(
-    r=8,
-    lora_alpha=32,
-    target_modules=["q_proj", "v_proj"],
-    lora_dropout=0.05,
-    bias="none",
-    task_type="CAUSAL_LM"
-)
-
-model = get_peft_model(model, lora_config)
-
-# Step 3: Load and prepare dataset
-dataset = load_dataset('json', data_files='dataset.jsonl')
-
-def format_prompt(example):
+# Tokenize
+def tokenize(example):
     prompt = f"### Instruction:\n{example['instruction']}\n\n### Input:\n{example['input']}\n\n### Output:\n"
-    input_ids = tokenizer(prompt, truncation=True, max_length=512)["input_ids"]
-    labels = tokenizer(example["output"], truncation=True, max_length=512)["input_ids"]
+    target = example["output"]
+    prompt_ids = tokenizer(prompt, truncation=True, padding="max_length", max_length=512)
+    label_ids = tokenizer(target, truncation=True, padding="max_length", max_length=256)
     return {
-        "input_ids": input_ids,
-        "labels": labels,
+        "input_ids": prompt_ids["input_ids"],
+        "attention_mask": prompt_ids["attention_mask"],
+        "labels": label_ids["input_ids"]
     }
 
-dataset = dataset.map(format_prompt)
+tokenized = dataset.map(tokenize, remove_columns=dataset["train"].column_names)
 
-# Step 4: Training settings
-training_args = TrainingArguments(
-    output_dir="./phi2-finetuned",
+# LoRA config
+peft_config = LoraConfig(
+    r=8,
+    lora_alpha=16,
+    task_type=TaskType.CAUSAL_LM,
+    lora_dropout=0.1
+)
+model = get_peft_model(model, peft_config)
+
+# Training arguments
+args = TrainingArguments(
+    output_dir="./finetuned-phi2-sql2mongo",
     per_device_train_batch_size=1,
-    gradient_accumulation_steps=4,
     num_train_epochs=3,
     logging_steps=10,
-    save_steps=50,
-    save_total_limit=2,
-    fp16=False,
+    save_steps=500,
+    learning_rate=2e-4,
+    fp16=True
 )
 
-# Step 5: Start fine-tuning
+# Trainer
 trainer = Trainer(
     model=model,
-    train_dataset=dataset['train'],
-    args=training_args,
-    data_collator=data_collator
+    args=args,
+    train_dataset=tokenized["train"]
 )
 
+# Train
 trainer.train()
