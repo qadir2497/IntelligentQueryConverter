@@ -4,6 +4,8 @@ from datasets import load_dataset
 
 model_id = "microsoft/phi-2"
 tokenizer = AutoTokenizer.from_pretrained(model_id)
+# Set pad_token to eos_token (recommended if padding is only needed for batching)
+tokenizer.pad_token = tokenizer.eos_token
 model = AutoModelForCausalLM.from_pretrained(model_id, device_map="auto", torch_dtype="auto")
 
 # Load your dataset
