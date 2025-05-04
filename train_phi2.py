@@ -39,8 +39,6 @@ peft_config = LoraConfig(
 )
 model = get_peft_model(model, peft_config)
 
-tokenizer.save_pretrained("./finetuned-phi2-sql2mongo")
-
 # Training arguments
 args = TrainingArguments(
     output_dir="./finetuned-phi2-sql2mongo",
@@ -61,3 +59,7 @@ trainer = Trainer(
 
 # Train
 trainer.train()
+
+# Save model and tokenizer
+trainer.save_model("./finetuned-phi2-sql2mongo")
+tokenizer.save_pretrained("./finetuned-phi2-sql2mongo")
