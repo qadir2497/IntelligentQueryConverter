@@ -1,6 +1,8 @@
 from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments, Trainer
 from peft import get_peft_model, LoraConfig, TaskType
 from datasets import load_dataset
+import os
+os.environ["WANDB_MODE"] = "disabled"
 
 model_id = "microsoft/phi-2"
 tokenizer = AutoTokenizer.from_pretrained(model_id)
