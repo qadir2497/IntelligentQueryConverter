@@ -13,15 +13,20 @@ dataset = load_dataset("json", data_files={"train": "dataset.jsonl"})
 
 # Tokenize
 def tokenize(example):
-    prompt = f"### Instruction:\n{example['instruction']}\n\n### Input:\n{example['input']}\n\n### Output:\n"
-    target = example["output"]
-    prompt_ids = tokenizer(prompt, truncation=True, padding="max_length", max_length=512)
-    label_ids = tokenizer(target, truncation=True, padding="max_length", max_length=256)
-    return {
-        "input_ids": prompt_ids["input_ids"],
-        "attention_mask": prompt_ids["attention_mask"],
-        "labels": label_ids["input_ids"]
-    }
+    # Construct full prompt + expected output
+    full_prompt = f"### Instruction:\n{example['instruction']}\n\n### Input:\n{example['input']}\n\n### Output:\n{example['output']}"
+
+    # Tokenize the full sequence
+    tokenized = tokenizer(
+        full_prompt,
+        truncation=True,
+        padding="max_length",
+        max_length=512
+    )
+
+    # Create labels: copy of input_ids
+    tokenized["labels"] = tokenized["input_ids"].copy()
+    return tokenized
 
 tokenized = dataset.map(tokenize, remove_columns=dataset["train"].column_names)
 
